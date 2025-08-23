@@ -1,14 +1,18 @@
+
 import sys
 import os
+from dotenv import load_dotenv
 import openai
 import googlemaps
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QListWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QListWidget
 from PyQt5.QtGui import QPalette, QBrush, QPixmap
 from PyQt5.QtCore import Qt
 
-# API key'lerini ortam değişkeninden oku
+# .env dosyasını yükle
+load_dotenv()
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 openai.api_key = OPENAI_API_KEY
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
@@ -20,22 +24,45 @@ class IceCreamBot(QWidget):
         self.setWindowTitle("Ice Cream Location Bot")
         self.setGeometry(300, 300, 500, 600)
 
-        # Layout
+        # Ana dikey layout
         self.layout = QVBoxLayout()
+        self.layout.setAlignment(Qt.AlignCenter)
 
-        # Input alanı
+        # Arama barı ve butonunu yatayda ortalanmış şekilde koy
+        search_row = QWidget()
+        search_row_layout = QHBoxLayout()
+        search_row_layout.setContentsMargins(0, 0, 0, 0)
+        search_row_layout.setSpacing(0)
+        search_row_layout.setAlignment(Qt.AlignCenter)
+
         self.input = QLineEdit(self)
         self.input.setPlaceholderText("Bir şehir ve dondurma isteğini yaz (örn: Milano’da dondurma)")
-        self.layout.addWidget(self.input)
+        self.input.setFixedHeight(38)
+        self.input.setFixedWidth(320)
+        self.input.setStyleSheet("border-radius: 18px; border: 2px solid #FFD1DC; padding: 0 12px; font-size: 16px;")
 
-        # Buton
         self.button = QPushButton("Ara", self)
+        self.button.setFixedHeight(38)
+        self.button.setFixedWidth(70)
+        self.button.setStyleSheet("border-radius: 18px; background-color: #FFB6C1; color: white; font-weight: bold; font-size: 15px;")
         self.button.clicked.connect(self.handle_search)
-        self.layout.addWidget(self.button)
+        self.input.returnPressed.connect(self.handle_search)  # Enter tuşu ile arama
 
-        # Sonuç listesi
+        search_row_layout.addWidget(self.input)
+        search_row_layout.addSpacing(10)
+        search_row_layout.addWidget(self.button)
+        search_row.setLayout(search_row_layout)
+        self.layout.addSpacing(30)
+        self.layout.addWidget(search_row, alignment=Qt.AlignCenter)
+        self.layout.addSpacing(20)
+
+        # Sonuç listesi (daha estetik ve ortalanmış)
         self.results_list = QListWidget(self)
-        self.layout.addWidget(self.results_list)
+        self.results_list.setFixedHeight(220)
+        self.results_list.setFixedWidth(400)
+        self.results_list.setStyleSheet("border-radius: 18px; border: 2px solid #FFD1DC; background: rgba(255,255,255,0.85); font-size: 15px; padding: 10px;")
+        self.results_list.itemClicked.connect(self.open_place_url)
+        self.layout.addWidget(self.results_list, alignment=Qt.AlignCenter)
 
         self.setLayout(self.layout)
 
@@ -62,6 +89,7 @@ class IceCreamBot(QWidget):
             return
 
         self.results_list.clear()
+        self.place_urls = []  # Sonuçların URL'lerini burada tutacağız
 
         # 1. OpenAI’den kullanıcı isteğini daha net bir formata dönüştür
         refined_query = self.ask_openai(query)
@@ -70,14 +98,21 @@ class IceCreamBot(QWidget):
         places = self.find_places(refined_query)
 
         if not places:
-            self.results_list.addItem("❌ Sonuç bulunamadı.")
+            self.results_list.addItem("❌ İlgili bir arama yapınız...")
             return
 
-        # 3. İlk 3 sonucu listele
+        # 3. İlk 3 sonucu listele (sadece isim ve adres, url gizli tutulacak)
         for place in places:
-            self.results_list.addItem(
-                f"{place['name']} - {place['address']} (⭐ {place['rating']})\n{place['url']}\n"
-            )
+            display_text = f"{place['name']} - {place['address']} (⭐ {place['rating']})"
+            self.results_list.addItem(display_text)
+            self.place_urls.append(place['url'])
+
+    def open_place_url(self, item):
+        # Tıklanan mekanın sırasına göre URL'yi bul ve aç
+        import webbrowser
+        row = self.results_list.row(item)
+        if hasattr(self, 'place_urls') and 0 <= row < len(self.place_urls):
+            webbrowser.open(self.place_urls[row])
 
     def ask_openai(self, user_query):
         """
