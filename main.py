@@ -24,9 +24,27 @@ class IceCreamBot(QWidget):
         self.setWindowTitle("Ice Cream Location Bot")
         self.setGeometry(300, 300, 500, 600)
 
+
         # Ana dikey layout
         self.layout = QVBoxLayout()
         self.layout.setAlignment(Qt.AlignCenter)
+
+        # Özel başlık: Ice Cream Bot
+        from PyQt5.QtGui import QFontDatabase, QFont
+        from PyQt5.QtWidgets import QLabel
+        font_path = os.path.join("Assets", "Gluten-VariableFont_slnt,wght.ttf")
+        font_id = QFontDatabase.addApplicationFont(font_path)
+        family = QFontDatabase.applicationFontFamilies(font_id)[0] if font_id != -1 else "Arial"
+        title_label = QLabel()
+        title_label.setText(
+            '<span style="color:#FF714B;">ice</span> '
+            '<span style="color:#6A0066;">cream</span> '
+            '<span style="color:#7ADAA5;">bot</span>'
+        )
+        title_label.setFont(QFont(family, 30, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("background: transparent; margin-bottom: 10px;")
+        self.layout.addWidget(title_label, alignment=Qt.AlignCenter)
 
         # Arama barı ve butonunu yatayda ortalanmış şekilde koy
         search_row = QWidget()
@@ -141,7 +159,7 @@ class IceCreamBot(QWidget):
 
     def find_places(self, query):
         """
-        Google Maps üzerinde query’ye göre mekan arar, ilk 3 sonucu döndürür.
+        Google Maps üzerinde sadece cafe, pastane, dondurmacı ve fırın türlerini arar.
         """
         try:
             # Şehir ismini koordinata çevir
@@ -152,27 +170,36 @@ class IceCreamBot(QWidget):
             location = geocode[0]["geometry"]["location"]
             latlng = (location["lat"], location["lng"])
 
-            # Places API çağrısı
-            results = gmaps.places(
-                query=query,
-                location=latlng,
-                radius=10000,
-                language="tr"
-            )
+            # Desteklenen türler
+            allowed_types = ["cafe", "bakery", "restaurant"]
 
             places = []
-            for place in results.get("results", [])[:3]:  # sadece ilk 3
-                name = place.get("name", "")
-                address = place.get("formatted_address") or place.get("vicinity", "")
-                rating = place.get("rating", "N/A")
-                url = f"https://www.google.com/maps/place/?q=place_id:{place['place_id']}"
-                places.append({
-                    "name": name,
-                    "address": address,
-                    "rating": rating,
-                    "url": url
-                })
-            return places
+            for place_type in allowed_types:
+                results = gmaps.places_nearby(
+                    location=latlng,
+                    radius=5000,  # 5 km yarıçap
+                    type=place_type,
+                    language="tr"
+                )
+
+                for place in results.get("results", []):
+                    name = place.get("name", "").lower()
+
+                    # Sadece tatlı/dondurma/cafe tarzı isimler filtrelensin
+                    if any(word in name for word in ["dondurma", "cafe", "pastane", "tatlı", "bakery", "ice cream", "fırın"]):
+                        address = place.get("vicinity", "")
+                        rating = place.get("rating", "N/A")
+                        url = f"https://www.google.com/maps/place/?q=place_id:{place['place_id']}"
+                        places.append({
+                            "name": place.get("name", ""),
+                            "address": address,
+                            "rating": rating,
+                            "url": url
+                        })
+
+            # İlk 5 taneyi döndür
+            return places[:3]
+
         except Exception as e:
             print(f"Google Maps API hatası: {e}")
             return []
