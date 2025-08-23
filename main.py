@@ -1,183 +1,150 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QMessageBox, QListWidget, QLabel, QHBoxLayout, QSpacerItem, QSizePolicy
-from PyQt5.QtCore import Qt
-from Components.search_bar import SearchBar
-
 import os
-from dotenv import load_dotenv
-import googlemaps
 import openai
+import googlemaps
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QListWidget
+from PyQt5.QtGui import QPalette, QBrush, QPixmap
+from PyQt5.QtCore import Qt
 
-# .env dosyasından API anahtarlarını yükle
-load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# API key'lerini ortam değişkeninden oku
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-gmaps = googlemaps.Client(key=GOOGLE_API_KEY)
-openai.api_key = OPENAI_API_KEY
-if not openai.api_key:
-    print("OpenAI API anahtarı bulunamadı!")
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
-class MainWindow(QMainWindow):
+openai.api_key = OPENAI_API_KEY
+gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
+
+
+class IceCreamBot(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Ice Cream Bot")
-        self.setGeometry(100, 100, 900, 600)
+        self.setWindowTitle("Ice Cream Location Bot")
+        self.setGeometry(300, 300, 500, 600)
 
-        # Arka planı icbBackground.jpg olarak ayarla
-        self.setStyleSheet("""
-            QMainWindow {
-                background-image: url(Assets/icbBackground.jpg);
-                background-repeat: no-repeat;
-                background-position: center;
-                background-attachment: fixed;
-                background-size: cover;
-            }
-        """)
+        # Layout
+        self.layout = QVBoxLayout()
 
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.layout = QVBoxLayout(self.central_widget)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+        # Input alanı
+        self.input = QLineEdit(self)
+        self.input.setPlaceholderText("Bir şehir ve dondurma isteğini yaz (örn: Milano’da dondurma)")
+        self.layout.addWidget(self.input)
 
-        # Başlık (Ice Cream Bot)
-        self.title_label = QLabel("Ice Cream Bot")
-        self.title_label.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        self.title_label.setStyleSheet("""
-            QLabel {
-                font-size: 40px;
-                font-family: 'Comic Sans MS', 'Comic Neue', Arial, sans-serif;
-                color: #FF69B4;
-                font-weight: bold;
-                margin-top: 60px;
-                margin-bottom: 30px;
-                background: transparent;
-                letter-spacing: 2px;
-                text-shadow: 2px 2px 8px #fff;
-            }
-        """)
-        self.layout.addWidget(self.title_label)
+        # Buton
+        self.button = QPushButton("Ara", self)
+        self.button.clicked.connect(self.handle_search)
+        self.layout.addWidget(self.button)
 
-        # Ortada arama barı (SearchBar)
-        search_bar_container = QWidget()
-        search_bar_layout = QHBoxLayout()
-        search_bar_layout.setContentsMargins(0, 0, 0, 0)
-        search_bar_layout.setSpacing(0)
-        search_bar_container.setLayout(search_bar_layout)
-        search_bar_container.setFixedHeight(80)
-        search_bar_container.setStyleSheet("background: transparent;")
+        # Sonuç listesi
+        self.results_list = QListWidget(self)
+        self.layout.addWidget(self.results_list)
 
-        self.search_bar = SearchBar(
-            placeholder="Bir tatlıcı, pastane, fırın veya dondurmacı arayın"
-        )
-        self.search_bar.setFixedHeight(56)
-        self.search_bar.setFixedWidth(500)
-        self.search_bar.search_submitted.connect(self.handle_search)
-        search_bar_layout.addSpacerItem(QSpacerItem(1, 1, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        search_bar_layout.addWidget(self.search_bar)
-        search_bar_layout.addSpacerItem(QSpacerItem(1, 1, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        self.layout.addWidget(search_bar_container)
+        self.setLayout(self.layout)
 
-        # Sonuç kutusu (ortalanmış, transparan)
-        self.results_list = QListWidget()
-        self.results_list.setMinimumHeight(200)
-        self.results_list.setMaximumHeight(350)
-        self.results_list.setFixedWidth(500)
-        self.results_list.setStyleSheet("""
-            QListWidget {
-                background: rgba(255,255,255,0.7);
-                border: 2px solid #FFD1DC;
-                border-radius: 24px;
-                color: #444;
-                font-size: 16px;
-                font-family: 'Comic Sans MS', 'Comic Neue', Arial, sans-serif;
-                padding: 18px;
-                margin-top: 24px;
-            }
-            QListWidget::item {
-                padding: 10px 6px;
-            }
-        """)
-        results_container = QWidget()
-        results_layout = QHBoxLayout()
-        results_layout.setContentsMargins(0, 0, 0, 0)
-        results_layout.addSpacerItem(QSpacerItem(1, 1, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        results_layout.addWidget(self.results_list)
-        results_layout.addSpacerItem(QSpacerItem(1, 1, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        results_container.setLayout(results_layout)
-        self.layout.addWidget(results_container)
+        # Arkaplan resmi ayarla
+        self.set_background()
 
-        self.layout.addStretch()
+    def set_background(self):
+        palette = QPalette()
+        background_path = os.path.join("Assets", "icbBackground.jpg")
+        if os.path.exists(background_path):
+            pixmap = QPixmap(background_path)
+            palette.setBrush(QPalette.Window, QBrush(pixmap.scaled(self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)))
+            self.setPalette(palette)
 
-    def handle_search(self, query):
+    def resizeEvent(self, event):
+        """Pencere yeniden boyutlanınca arkaplan da yeniden ölçeklensin"""
+        self.set_background()
+        super().resizeEvent(event)
+
+    def handle_search(self):
+        query = self.input.text().strip()
+        if not query:
+            self.results_list.addItem("⚠️ Lütfen bir arama giriniz.")
+            return
+
         self.results_list.clear()
-        self.results_list.addItem("Yanıt bekleniyor...")
 
-        try:
-            # 1. OpenAI API'ye soruyu gönder
-            openai_response = self.ask_openai(query)
-            if not openai_response:
-                self.results_list.clear()
-                self.results_list.addItem("OpenAI'dan yanıt alınamadı. Lütfen terminaldeki hata mesajını kontrol edin.")
-                return
+        # 1. OpenAI’den kullanıcı isteğini daha net bir formata dönüştür
+        refined_query = self.ask_openai(query)
 
-            # 2. OpenAI yanıtını Google Maps aramasında kullan
-            places = self.find_places(openai_response)
-            self.results_list.clear()
-            if places:
-                for place in places:
-                    self.results_list.addItem(f"{place['name']} - {place['address']}")
-            else:
-                self.results_list.addItem("Üzgünüm, aradığınız kriterlere uygun bir yer bulamadım.")
-        except Exception as e:
-            self.results_list.clear()
-            self.results_list.addItem(f"Hata oluştu: {e}")
+        # 2. Google Maps’te yer ara
+        places = self.find_places(refined_query)
+
+        if not places:
+            self.results_list.addItem("❌ Sonuç bulunamadı.")
+            return
+
+        # 3. İlk 3 sonucu listele
+        for place in places:
+            self.results_list.addItem(
+                f"{place['name']} - {place['address']} (⭐ {place['rating']})\n{place['url']}\n"
+            )
 
     def ask_openai(self, user_query):
         """
-        Kullanıcıdan gelen soruyu OpenAI API'ye gönderir ve yanıtı döndürür.
-        Yanıtı, Google Maps aramasında kullanılacak şekilde sadeleştirir.
+        Kullanıcının sorusunu basit hale getirip sadece şehir + dondurma gibi bir query üretmesi için.
         """
         try:
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
+            prompt = f"""
+            Kullanıcı şu isteği yazdı: "{user_query}".
+            Bunu Google Maps araması için basit hale getir. Sadece şehir adı ve 'dondurma' kelimesini döndür.
+            Örn: 'Milano dondurma'
+            """
+            response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "Kullanıcıdan gelen arama cümlesini, Google Maps'te yer araması için uygun kısa bir anahtar kelimeye veya kategoriye dönüştür. Sadece anahtar kelime veya kategori döndür (ör: 'dondurmacı', 'pastane', 'bakery', 'ice cream shop')."},
-                    {"role": "user", "content": user_query}
+                    {"role": "system", "content": "Sen bir yardımcı asistanısın."},
+                    {"role": "user", "content": prompt}
                 ],
-                max_tokens=16,
+                max_tokens=20,
                 temperature=0
             )
-            # openai>=1.0.0 için:
-            result = response.choices[0].message.content.strip()
-            return result
+            refined = response["choices"][0]["message"]["content"].strip()
+            return refined
         except Exception as e:
             print(f"OpenAI API hatası: {e}")
-            return None
+            return user_query  # fallback
 
     def find_places(self, query):
-        # Google Maps Places API ile arama yap
+        """
+        Google Maps üzerinde query’ye göre mekan arar, ilk 3 sonucu döndürür.
+        """
         try:
-            # Türkiye merkezli arama için örnek bir konum (Ankara)
-            location = (39.9334, 32.8597)
+            # Şehir ismini koordinata çevir
+            geocode = gmaps.geocode(query)
+            if not geocode:
+                return []
+
+            location = geocode[0]["geometry"]["location"]
+            latlng = (location["lat"], location["lng"])
+
+            # Places API çağrısı
             results = gmaps.places(
                 query=query,
-                location=location,
-                radius=10000,  # 10 km yarıçap
+                location=latlng,
+                radius=10000,
                 language="tr"
             )
+
             places = []
-            for place in results.get("results", []):
+            for place in results.get("results", [])[:3]:  # sadece ilk 3
                 name = place.get("name", "")
                 address = place.get("formatted_address") or place.get("vicinity", "")
-                places.append({"name": name, "address": address})
+                rating = place.get("rating", "N/A")
+                url = f"https://www.google.com/maps/place/?q=place_id:{place['place_id']}"
+                places.append({
+                    "name": name,
+                    "address": address,
+                    "rating": rating,
+                    "url": url
+                })
             return places
         except Exception as e:
             print(f"Google Maps API hatası: {e}")
             return []
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = IceCreamBot()
     window.show()
     sys.exit(app.exec_())
