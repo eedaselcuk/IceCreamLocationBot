@@ -9,6 +9,7 @@ class SweetButton(QPushButton):
         self.setFont(QFont("Arial", 12, QFont.Bold))
         self.setFixedHeight(40)
 
+        # Button style for a sweet look
         self.setStyleSheet("""
             QPushButton {
                 background-color: #FFB6C1;

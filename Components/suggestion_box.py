@@ -3,12 +3,13 @@ from PyQt5.QtGui import QFont
 
 
 class SuggestionBox(QWidget):
-    def __init__(self, text="Tatlı öneri kutusu 💡"):
+    def __init__(self, text="Sweet suggestion box 💡"):
         super().__init__()
 
         self.label = QLabel(text)
         self.label.setFont(QFont("Arial", 11))
         self.label.setWordWrap(True)
+        # Style for the suggestion box
         self.label.setStyleSheet("""
             QLabel {
                 background-color: #FFE4E1;

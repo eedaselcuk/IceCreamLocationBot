@@ -1,2 +1,4 @@
+# Ignore OpenAI prompt file
+prompt.txt
 # Ortak ignore kuralları
 .env

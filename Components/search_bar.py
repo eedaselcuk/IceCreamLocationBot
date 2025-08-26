@@ -15,7 +15,7 @@ class SearchBar(QWidget):
         self.input.setFont(QFont("Comic Sans MS", 18))
         self.input.returnPressed.connect(self.emit_search_submitted)
 
-        # Görsele uygun pastel ve yuvarlatılmış stil
+        # Pastel and rounded style for a visual look
         self.input.setStyleSheet("""
             QLineEdit {
                 border: 4px solid #FFD1DC;
@@ -32,9 +32,9 @@ class SearchBar(QWidget):
             }
         """)
 
-        # Sağda büyüteç ikonu
+        # Magnifier icon on the right
         self.icon = QLabel()
-        pixmap = QPixmap("Assets/search_icon.png")  # search_icon.png dosyasını Assets klasörüne ekleyin
+        pixmap = QPixmap("Assets/search_icon.png")  # Add search_icon.png to the Assets folder
         if not pixmap.isNull():
             self.icon.setPixmap(pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.icon.setFixedSize(40, 40)
