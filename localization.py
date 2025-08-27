@@ -7,7 +7,7 @@ texts = {
         'search': 'Ara',
         'warn_empty': '⚠️ Lütfen bir arama giriniz.',
         'no_result': '❌ İlgili bir arama yapınız...',
-        'search_types': ['dondurmacı', 'pastane', 'fırın', 'nerede', 'öner']
+        'search_types': ['dondurmacı', 'pastane', 'fırın', 'nerede']
     },
     'en': {
         'title': '<span style="color:#FF714B;">ice</span> <span style="color:#6A0066;">cream</span> <span style="color:#7ADAA5;">bot</span>',

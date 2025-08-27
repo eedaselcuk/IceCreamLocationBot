@@ -37,11 +37,10 @@ class SearchBarWidget(QWidget):
 				font-weight: bold;
 				font-size: 15px;
 			}
-			QPushButton:pressed {
+			QPushButton:hover {
 				background-color: #FFB6C1;
 			}
 		""")
-		self.searched_once = False
 
 		search_row_layout.addWidget(self.input)
 		search_row_layout.addSpacing(10)
@@ -54,29 +53,15 @@ class SearchBarWidget(QWidget):
 		# Results list
 		self.results_list = QListWidget(self)
 		self.results_list.setFixedHeight(220)
-		self.results_list.setFixedWidth(400)
+		self.results_list.setFixedWidth(600)
 		self.results_list.setStyleSheet("border-radius: 18px; border: 2px solid #FFD1DC; background: rgba(255,255,255,0.85); font-size: 15px; padding: 10px;")
 		self.results_list.itemClicked.connect(self.open_url_callback)
 		layout.addWidget(self.results_list, alignment=Qt.AlignCenter)
-
 		self.setLayout(layout)
+		self.button.clicked.connect(self.search_callback)
+		self.input.returnPressed.connect(self.search_callback)
 
-		self.button.clicked.connect(self.on_search)
-		self.input.returnPressed.connect(self.on_search)
-
-	def on_search(self):
-		if not self.searched_once:
-			self.button.setStyleSheet("""
-				QPushButton {
-					border-radius: 18px;
-					background-color: #FFB6C1;
-					color: white;
-					font-weight: bold;
-					font-size: 15px;
-				}
-			""")
-			self.searched_once = True
-		self.search_callback()
+	# Remove any code outside __init__
 
 	def update_language(self, lang):
 		self.current_language = lang

@@ -19,7 +19,9 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-openai.api_key = OPENAI_API_KEY
+
+# Create OpenAI client for new API
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
 
 
@@ -104,22 +106,41 @@ class IceCreamBot(QWidget):
             return
 
         from icecream import ask_openai, find_places
-        refined_query = ask_openai(openai, query)
-
         self.search_bar_widget.results_list.clear()
-        self.place_urls = []  # Store the URLs of the results here
+        self.place_urls = []
 
-        places = find_places(gmaps, texts, self.current_language, refined_query)
+        # 1. OpenAI ile sorgudan semt/şehir ve mekan türü tespit et
+        ai_response = ask_openai(openai_client, query)
 
-        if not places:
-            self.search_bar_widget.results_list.addItem(texts[self.current_language]['no_result'])
+        # Eğer yanıt tek cümlelik bir sonuçsa ("en iyi ... şurada" veya "the best ... is at ..."), doğrudan göster
+        # Eğer yanıt kısa bir arama cümlesiyse ("best ice cream ...", "yakın pastane ..."), Google Maps'te ara
+        ai_response_lower = ai_response.lower()
+        is_single_sentence = False
+        # Türkçe ve İngilizce için anahtar kelimeler
+        if ("en iyi" in ai_response_lower and "bulunur" in ai_response_lower) or ("the best" in ai_response_lower and "is at" in ai_response_lower):
+            is_single_sentence = True
+
+        if is_single_sentence:
+            # OpenAI tek cümlelik yanıt döndüyse, aynı zamanda ilgili yeri de bul ve clickable olarak ekle
+            self.search_bar_widget.results_list.addItem(ai_response)
+            # OpenAI yanıtından şehir ve mekan türünü çıkarmak yerine, orijinal soruyla Google Maps'te arama yap
+            places = find_places(gmaps, texts, self.current_language, query)
+            if places:
+                top_place = places[0]
+                display_text = f"{top_place['name']} - {top_place['address']} (⭐ {top_place['rating']})"
+                self.search_bar_widget.results_list.addItem(display_text)
+                self.place_urls.append(top_place['url'])
             return
-
-        # 3. List the first 3 results (only name and address, url is kept hidden)
-        for place in places:
-            display_text = f"{place['name']} - {place['address']} (⭐ {place['rating']})"
-            self.search_bar_widget.results_list.addItem(display_text)
-            self.place_urls.append(place['url'])
+        else:
+            # OpenAI'dan dönen kısa arama cümlesiyle Google Maps'te ara
+            places = find_places(gmaps, texts, self.current_language, ai_response)
+            if not places:
+                self.search_bar_widget.results_list.addItem(texts[self.current_language]['no_result'])
+                return
+            for place in places:
+                display_text = f"{place['name']} - {place['address']} (⭐ {place['rating']})"
+                self.search_bar_widget.results_list.addItem(display_text)
+                self.place_urls.append(place['url'])
 
     def open_place_url(self, item):
         # Open the URL of the clicked place

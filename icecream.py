@@ -7,8 +7,9 @@ def ask_openai(openai, user_query):
 		with open("prompt.txt", "r", encoding="utf-8") as f:
 			prompt_template = f.read()
 		prompt = prompt_template.replace("{user_query}", user_query)
-		response = openai.ChatCompletion.create(
-			model="gpt-4o-mini",
+		# openai should be an OpenAI client object
+		response = openai.chat.completions.create(
+			model="gpt-4o",
 			messages=[
 				{"role": "system", "content": "You are an assistant."},
 				{"role": "user", "content": prompt}
@@ -16,7 +17,7 @@ def ask_openai(openai, user_query):
 			max_tokens=200,
 			temperature=0
 		)
-		refined = response["choices"][0]["message"]["content"].strip()
+		refined = response.choices[0].message.content.strip()
 		return refined
 	except Exception as e:
 		print(f"OpenAI API hatası: {e}")
