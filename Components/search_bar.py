@@ -1,51 +1,84 @@
-from PyQt5.QtWidgets import QWidget, QLineEdit, QHBoxLayout, QLabel
-from PyQt5.QtGui import QFont, QPixmap
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QPushButton, QListWidget
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
+from localization import texts
 
+class SearchBarWidget(QWidget):
+	def __init__(self, current_language, search_callback, open_url_callback, parent=None):
+		super().__init__(parent)
+		self.current_language = current_language
+		self.search_callback = search_callback
+		self.open_url_callback = open_url_callback
 
-class SearchBar(QWidget):
-    search_submitted = pyqtSignal(str)
+		layout = QVBoxLayout()
+		layout.setAlignment(Qt.AlignCenter)
 
-    def __init__(self, placeholder="Search..."):
-        super().__init__()
+		# Search bar and button row
+		search_row = QWidget()
+		search_row_layout = QHBoxLayout()
+		search_row_layout.setContentsMargins(0, 0, 0, 0)
+		search_row_layout.setSpacing(0)
+		search_row_layout.setAlignment(Qt.AlignCenter)
 
-        self.input = QLineEdit()
-        self.input.setPlaceholderText(placeholder)
-        self.input.setFixedHeight(56)
-        self.input.setFont(QFont("Comic Sans MS", 18))
-        self.input.returnPressed.connect(self.emit_search_submitted)
+		self.input = QLineEdit(self)
+		self.input.setPlaceholderText(texts[self.current_language]['placeholder'])
+		self.input.setFixedHeight(38)
+		self.input.setFixedWidth(320)
+		self.input.setStyleSheet("border-radius: 18px; border: 2px solid #FFD1DC; padding: 0 12px; font-size: 16px;")
 
-        # Pastel and rounded style for a visual look
-        self.input.setStyleSheet("""
-            QLineEdit {
-                border: 4px solid #FFD1DC;
-                border-radius: 32px;
-                padding-left: 24px;
-                padding-right: 48px;
-                background-color: #FFF8FB;
-                color: #444;
-                font-size: 20px;
-            }
-            QLineEdit:focus {
-                border: 4px solid #FFB6C1;
-                background-color: #FFFFFF;
-            }
-        """)
+		self.button = QPushButton(texts[self.current_language]['search'], self)
+		self.button.setFixedHeight(38)
+		self.button.setFixedWidth(70)
+		self.button.setStyleSheet("""
+			QPushButton {
+				border-radius: 18px;
+				background-color: #B6FFF4;
+				color: white;
+				font-weight: bold;
+				font-size: 15px;
+			}
+			QPushButton:pressed {
+				background-color: #FFB6C1;
+			}
+		""")
+		self.searched_once = False
 
-        # Magnifier icon on the right
-        self.icon = QLabel()
-        pixmap = QPixmap("Assets/search_icon.png")  # Add search_icon.png to the Assets folder
-        if not pixmap.isNull():
-            self.icon.setPixmap(pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.icon.setFixedSize(40, 40)
-        self.icon.setStyleSheet("background: transparent; margin-left: -44px;")
+		search_row_layout.addWidget(self.input)
+		search_row_layout.addSpacing(10)
+		search_row_layout.addWidget(self.button)
+		search_row.setLayout(search_row_layout)
+		layout.addSpacing(30)
+		layout.addWidget(search_row, alignment=Qt.AlignCenter)
+		layout.addSpacing(20)
 
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.input)
-        layout.addWidget(self.icon)
-        self.setLayout(layout)
+		# Results list
+		self.results_list = QListWidget(self)
+		self.results_list.setFixedHeight(220)
+		self.results_list.setFixedWidth(400)
+		self.results_list.setStyleSheet("border-radius: 18px; border: 2px solid #FFD1DC; background: rgba(255,255,255,0.85); font-size: 15px; padding: 10px;")
+		self.results_list.itemClicked.connect(self.open_url_callback)
+		layout.addWidget(self.results_list, alignment=Qt.AlignCenter)
 
-    def emit_search_submitted(self):
-        self.search_submitted.emit(self.input.text())
+		self.setLayout(layout)
+
+		self.button.clicked.connect(self.on_search)
+		self.input.returnPressed.connect(self.on_search)
+
+	def on_search(self):
+		if not self.searched_once:
+			self.button.setStyleSheet("""
+				QPushButton {
+					border-radius: 18px;
+					background-color: #FFB6C1;
+					color: white;
+					font-weight: bold;
+					font-size: 15px;
+				}
+			""")
+			self.searched_once = True
+		self.search_callback()
+
+	def update_language(self, lang):
+		self.current_language = lang
+		self.input.setPlaceholderText(texts[self.current_language]['placeholder'])
+		self.button.setText(texts[self.current_language]['search'])

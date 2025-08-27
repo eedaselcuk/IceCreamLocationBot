@@ -1,77 +1,80 @@
-import os
-import requests
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from dotenv import load_dotenv
 
-# Load API keys from .env file
-load_dotenv()
+def ask_openai(openai, user_query):
+	"""
+	Reads the prompt from prompt.txt and sends it to OpenAI, filling in the user_query.
+	"""
+	try:
+		with open("prompt.txt", "r", encoding="utf-8") as f:
+			prompt_template = f.read()
+		prompt = prompt_template.replace("{user_query}", user_query)
+		response = openai.ChatCompletion.create(
+			model="gpt-4o-mini",
+			messages=[
+				{"role": "system", "content": "You are an assistant."},
+				{"role": "user", "content": prompt}
+			],
+			max_tokens=200,
+			temperature=0
+		)
+		refined = response["choices"][0]["message"]["content"].strip()
+		return refined
+	except Exception as e:
+		print(f"OpenAI API hatası: {e}")
+		return user_query  # fallback
+def find_places(gmaps, texts, current_language, query):
+	"""
+	Searches for cafes, bakeries, ice cream shops, and patisseries on Google Maps, using search_types from localization.py for filtering.
+	If no results are found in the current language, tries the alternative language's search_types as fallback.
+	"""
+	try:
+		# Convert city name to coordinates
+		geocode = gmaps.geocode(query)
+		if not geocode:
+			return []
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+		location = geocode[0]["geometry"]["location"]
+		latlng = (location["lat"], location["lng"])
 
-# Get top 3 ice cream shops from Google Places API
-def get_ice_cream_shops(city_name):
-    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {
-        "query": f"ice cream shops in {city_name}",
-        "key": GOOGLE_API_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
-    results = data.get("results", [])
-    
-    if not results:
-        return "No ice cream shops found."
+		# Supported types
+		allowed_types = ["cafe", "bakery", "restaurant"]
 
-    shops = []
-    for place in results[:2]:
-        name = place.get("name", "Unknown")
-        rating = place.get("rating", "N/A")
-        address = place.get("formatted_address", "N/A")
-        shops.append(f"{name} - Rating: {rating} - Address: {address}")
-    
-    return "\n".join(shops)
+		def get_places(search_types, lang_code):
+			found = []
+			for place_type in allowed_types:
+				results = gmaps.places_nearby(
+					location=latlng,
+					radius=5000,  # 5 km
+					type=place_type,
+					language=lang_code
+				)
+				for place in results.get("results", []):
+					name = place.get("name", "").lower()
+					if any(word in name for word in search_types):
+						address = place.get("vicinity", "")
+						rating = place.get("rating", "N/A")
+						url = f"https://www.google.com/maps/place/?q=place_id:{place['place_id']}"
+						found.append({
+							"name": place.get("name", ""),
+							"address": address,
+							"rating": rating,
+							"url": url
+						})
+			return found
 
-# Prompt Template
-template = """
-You are a world-renowned ice cream expert.
+		# Try current language search_types first
+		search_types = [s.lower() for s in texts[current_language].get('search_types', [])]
+		lang_code = current_language if current_language == 'tr' else 'en'
+		places = get_places(search_types, lang_code)
 
-The user is currently in {city}, and they love {flavor} ice cream.
-Here are some options from Google Maps:
+		# If no results, try the other language's search_types as fallback
+		if not places:
+			alt_lang = 'en' if current_language == 'tr' else 'tr'
+			alt_search_types = [s.lower() for s in texts[alt_lang].get('search_types', [])]
+			alt_lang_code = alt_lang if alt_lang == 'tr' else 'en'
+			places = get_places(alt_search_types, alt_lang_code)
 
-{places}
+		return places[:3]
 
-Based on your expertise, which place would you recommend and why?
-"""
-
-prompt = PromptTemplate(
-    input_variables=["city", "flavor", "places"],
-    template=template
-)
-
-# LLM setup
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0.7)
-chain = LLMChain(llm=llm, prompt=prompt)
-
-# CLI runner
-if __name__ == "__main__":
-    city = input("Enter a city: ")
-    flavor = input("What's your favorite flavor? ")
-
-    print("\n🔍 Fetching top ice cream places...\n")
-    places_text = get_ice_cream_shops(city)
-    print(places_text)
-
-    print("\n Asking the AI for a recommendation...\n")
-    response = chain.invoke({
-        "city": city,
-        "flavor": flavor,
-        "places": places_text
-    })
-
-    print("AI's Recommendation: \n")
-    print(response)
-
-input("\nPress Enter to exit...")
+	except Exception as e:
+		print(f"mistakes by Google Maps API: {e}")
+		return []
