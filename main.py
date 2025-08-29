@@ -10,8 +10,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPalette, QBrush, QPixmap, QFontDatabase, QFont
 from PyQt5.QtCore import Qt
-from Components.language_selector import LanguageSelector
-from localization import texts
 
  # Load .env file
 load_dotenv()
@@ -32,57 +30,36 @@ class IceCreamBot(QWidget):
         self.setWindowTitle("Ice Cream Location Bot")
         self.setGeometry(300, 300, 500, 600)
 
-        # ...existing code...
-
-        # Language state
-        self.current_language = 'tr'  # default
-
         # Main vertical layout
         self.layout = QVBoxLayout()
         self.layout.setAlignment(Qt.AlignCenter)
-
-        # Language selector (top right, new component)
-        self.lang_selector = LanguageSelector(self.current_language, self.set_language, self)
-        self.lang_selector.move(self.width() - self.lang_selector.width() - 18, 18)
-        self.lang_selector.raise_()
-        # Reposition on resize
-        self.old_resizeEvent = self.resizeEvent
-        def new_resizeEvent(event):
-            self.lang_selector.move(self.width() - self.lang_selector.width() - 18, 18)
-            if hasattr(self, 'old_resizeEvent'):
-                self.old_resizeEvent(event)
-        self.resizeEvent = new_resizeEvent
 
         # Custom title: Ice Cream Bot
         font_path = os.path.join("Assets", "Gluten-VariableFont_slnt,wght.ttf")
         font_id = QFontDatabase.addApplicationFont(font_path)
         family = QFontDatabase.applicationFontFamilies(font_id)[0] if font_id != -1 else "Arial"
         self.title_label = QLabel()
-        self.title_label.setText(texts[self.current_language]['title'])
+        self.title_label.setText("<span style=\"color:#FF714B;\">ice</span> <span style=\"color:#6A0066;\">cream</span> <span style=\"color:#7ADAA5;\">bot</span>")
         self.title_label.setFont(QFont(family, 30, QFont.Bold))
         self.title_label.setAlignment(Qt.AlignCenter)
         self.title_label.setStyleSheet("background: transparent; margin-bottom: 10px;")
         self.layout.addWidget(self.title_label, alignment=Qt.AlignCenter)
 
-
-        # Add SearchBarWidget before set_language is called
+        # Add SearchBarWidget (single language, no localization)
         from Components.search_bar import SearchBarWidget
         self.search_bar_widget = SearchBarWidget(
-            self.current_language,
             self.handle_search,
             self.open_place_url,
             self
         )
         self.layout.addWidget(self.search_bar_widget, alignment=Qt.AlignCenter)
-        self.setLayout(self.layout)
 
-        # Set background image
+
+        self.setLayout(self.layout)
         self.set_background()
 
 
     def set_language(self, lang):
-        self.current_language = lang
-        self.title_label.setText(texts[self.current_language]['title'])
         self.search_bar_widget.update_language(lang)
 
     def set_background(self):
@@ -100,54 +77,65 @@ class IceCreamBot(QWidget):
 
     def handle_search(self):
         query = self.search_bar_widget.input.text().strip()
-
-        if not query:
-            self.search_bar_widget.results_list.addItem(texts[self.current_language]['warn_empty'])
-            return
-
-        from icecream import ask_openai, find_places
         self.search_bar_widget.results_list.clear()
         self.place_urls = []
 
-        # 1. OpenAI ile sorgudan semt/şehir ve mekan türü tespit et
-        ai_response = ask_openai(openai_client, query)
-
-        # Eğer yanıt tek cümlelik bir sonuçsa ("en iyi ... şurada" veya "the best ... is at ..."), doğrudan göster
-        # Eğer yanıt kısa bir arama cümlesiyse ("best ice cream ...", "yakın pastane ..."), Google Maps'te ara
-        ai_response_lower = ai_response.lower()
-        is_single_sentence = False
-        # Türkçe ve İngilizce için anahtar kelimeler
-        if ("en iyi" in ai_response_lower and "bulunur" in ai_response_lower) or ("the best" in ai_response_lower and "is at" in ai_response_lower):
-            is_single_sentence = True
-
-        if is_single_sentence:
-            # OpenAI tek cümlelik yanıt döndüyse, aynı zamanda ilgili yeri de bul ve clickable olarak ekle
-            self.search_bar_widget.results_list.addItem(ai_response)
-            # OpenAI yanıtından şehir ve mekan türünü çıkarmak yerine, orijinal soruyla Google Maps'te arama yap
-            places = find_places(gmaps, texts, self.current_language, query)
-            if places:
-                top_place = places[0]
-                display_text = f"{top_place['name']} - {top_place['address']} (⭐ {top_place['rating']})"
-                self.search_bar_widget.results_list.addItem(display_text)
-                self.place_urls.append(top_place['url'])
+        if not query:
+            self.search_bar_widget.results_list.addItem("⚠️ Please enter a search.")
             return
-        else:
-            # OpenAI'dan dönen kısa arama cümlesiyle Google Maps'te ara
-            places = find_places(gmaps, texts, self.current_language, ai_response)
-            if not places:
-                self.search_bar_widget.results_list.addItem(texts[self.current_language]['no_result'])
-                return
-            for place in places:
-                display_text = f"{place['name']} - {place['address']} (⭐ {place['rating']})"
-                self.search_bar_widget.results_list.addItem(display_text)
-                self.place_urls.append(place['url'])
+
+        from icecream import ask_openai
+        try:
+            ai_response = ask_openai(openai_client, query)
+            self.search_bar_widget.results_list.addItem(ai_response)
+
+            # Prompt yanıtından maps_query çıkar, linki ayrı satır olarak ekle
+            import re
+            maps_query = None
+            # 1. Tırnak içinde aramaya çalış
+            output_match = re.search(r'"([^"]+)"|“([^”]+)”', ai_response)
+            if output_match:
+                maps_query = output_match.group(1) or output_match.group(2)
+            # 2. "Here is the place you asking for : ..." veya benzeri bir yapı varsa onu al
+            if not maps_query:
+                colon_match = re.search(r':\s*(.+)$', ai_response)
+                if colon_match:
+                    maps_query = colon_match.group(1).strip()
+            # 3. Hala bulamazsa, yanıtın tamamını maps_query olarak kullan (örnek: "best bakery Napoli")
+            if not maps_query and len(ai_response.split()) <= 6:
+                maps_query = ai_response.strip()
+            # maps_query bulunduysa Google Maps linki oluştur (sadece ayrı satır olarak)
+            if maps_query:
+                from PyQt5.QtWidgets import QListWidgetItem
+                gmaps_url = f"https://www.google.com/maps/search/{maps_query.replace(' ', '+')}"
+                item = QListWidgetItem(f"🔗 Google Maps: {gmaps_url}")
+                item.setData(Qt.UserRole, gmaps_url)
+                self.search_bar_widget.results_list.addItem(item)
+        except Exception as e:
+            self.search_bar_widget.results_list.addItem(f"❌ Error: {e}")
 
     def open_place_url(self, item):
-        # Open the URL of the clicked place
+        # Sadece Google Maps link satırına tıklanınca işlem yap
+        from PyQt5.QtWidgets import QApplication, QLabel
+        from PyQt5.QtCore import Qt, QTimer
         import webbrowser
-        row = self.search_bar_widget.results_list.row(item)
-        if hasattr(self, 'place_urls') and 0 <= row < len(self.place_urls):
-            webbrowser.open(self.place_urls[row])
+        link = item.data(Qt.UserRole)
+        if link:
+            # Panoya kopyala
+            clipboard = QApplication.clipboard()
+            clipboard.setText(link)
+            # Tarayıcıda aç
+            webbrowser.open(link)
+            # Küçük bir hint popup göster (2 sn)
+            hint = QLabel("Link copied!")
+            hint.setWindowFlags(Qt.ToolTip)
+            hint.setStyleSheet("background-color: #222; color: #fff; font-size: 16px; padding: 10px; border-radius: 8px;")
+            hint.setAlignment(Qt.AlignCenter)
+            hint.setFixedWidth(180)
+            hint.move(self.geometry().center().x() - 90, self.geometry().center().y() - 30)
+            hint.setParent(self)
+            hint.show()
+            QTimer.singleShot(2000, hint.close)
 
     def ask_openai(self, user_query):
         """

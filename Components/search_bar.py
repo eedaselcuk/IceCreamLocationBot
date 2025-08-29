@@ -1,12 +1,11 @@
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QPushButton, QListWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from localization import texts
+
 
 class SearchBarWidget(QWidget):
-	def __init__(self, current_language, search_callback, open_url_callback, parent=None):
+	def __init__(self, search_callback, open_url_callback, parent=None):
 		super().__init__(parent)
-		self.current_language = current_language
 		self.search_callback = search_callback
 		self.open_url_callback = open_url_callback
 
@@ -21,12 +20,12 @@ class SearchBarWidget(QWidget):
 		search_row_layout.setAlignment(Qt.AlignCenter)
 
 		self.input = QLineEdit(self)
-		self.input.setPlaceholderText(texts[self.current_language]['placeholder'])
+		self.input.setPlaceholderText("Type a city and ice cream, patisserie or bakery request (e.g. ice cream in Milan, patisserie in Paris, bakery in Rome)")
 		self.input.setFixedHeight(38)
 		self.input.setFixedWidth(320)
 		self.input.setStyleSheet("border-radius: 18px; border: 2px solid #FFD1DC; padding: 0 12px; font-size: 16px;")
 
-		self.button = QPushButton(texts[self.current_language]['search'], self)
+		self.button = QPushButton("Search", self)
 		self.button.setFixedHeight(38)
 		self.button.setFixedWidth(70)
 		self.button.setStyleSheet("""
@@ -63,7 +62,3 @@ class SearchBarWidget(QWidget):
 
 	# Remove any code outside __init__
 
-	def update_language(self, lang):
-		self.current_language = lang
-		self.input.setPlaceholderText(texts[self.current_language]['placeholder'])
-		self.button.setText(texts[self.current_language]['search'])
